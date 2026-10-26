@@ -21,7 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-10-25 digital-signoff-handover v29 - email errors are reported'   # keep in sync with BUILD in index.html
+BUILD = '2026-10-26 digital-signoff-handover v30 - detailed permit emails'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -265,6 +265,25 @@ def mail_async(sub, body, to):
             connections.close_all()
     threading.Thread(target=run, daemon=True).start()
 
+def permit_email(sub, to, pid, link=''):
+    """Email a notification with the permit's key details and a link to sign in and act on it."""
+    d, who = {}, None
+    try:
+        row = Permit.objects.filter(id=int(pid)).first()
+        d = json.loads(row.data) if row else {}
+        who = Person.objects.filter(email=to).first()
+    except Exception:
+        pass
+    kind = KIND_NAMES.get(d.get('kind'), '')
+    area = ' · '.join(x for x in (d.get('dept'), d.get('loc')) if x)
+    when = ' '.join(x for x in (str(d.get('date') or ''), ((d.get('start') or '') + ('-' + d['finish'] if d.get('finish') else '')) if d.get('start') else '') if x)
+    lines = ['Hello ' + (who.name if who else 'there') + ',', '', sub + '.', '']
+    for label, val in (('Permit', d.get('no')), ('Type', kind), ('Department / area', area), ('Requested by', ' · '.join(x for x in (d.get('name'), d.get('company')) if x)), ('Date and time', when), ('Work', (d.get('desc') or '')[:200])):
+        if val:
+            lines.append(label + ': ' + str(val))
+    lines += ['', 'Open the permit system, sign in and review it:' + ((' ' + link) if link else ''), '', 'This is an automated message from the Permit to Work system.']
+    mail_async('[Permit to Work] ' + sub, '\n'.join(lines), to)
+
 def mk_note(to, sub, pid):
     nid = time.time() * 1000 + random.random()
     low = sub.lower()
@@ -272,7 +291,7 @@ def mk_note(to, sub, pid):
     category = 'lifecycle' if any(k in low for k in ('suspend', 'resum', 'complete', 'closure', 'closed')) else 'approval' if any(k in low for k in ('confirm', 'approve', 'correction', 'clarification')) else 'expiry' if any(k in low for k in ('expire', 'valid window', 'not returned', 'overdue')) else 'general'
     n = {'id': nid, 'to': to, 'sub': sub, 'pid': pid, 'ts': timezone.now().isoformat(), 'rd': False, 'priority': priority, 'category': category}
     Note.objects.create(nid=str(nid), to=to, data=json.dumps(n))
-    mail_async(sub, sub + '\n\nOpen the permit system to review it.', to)
+    permit_email(sub, to, pid, (os.environ.get('PUBLIC_URL') or os.environ.get('RENDER_EXTERNAL_URL') or '').rstrip('/'))
 
 def alert_once(key, people, sub, pid):
     if Alert.objects.filter(key=key).exists():
@@ -688,7 +707,7 @@ def notes(request):
             category = 'lifecycle' if any(k in sub_low for k in ('suspend', 'resum', 'complete', 'closure', 'closed')) else 'approval' if any(k in sub_low for k in ('confirm', 'approve', 'correction', 'clarification')) else 'expiry' if any(k in sub_low for k in ('expire', 'valid window', 'not returned', 'overdue')) else 'general'
             clean = {'id': n['id'], 'to': to, 'sub': sub, 'pid': pid, 'ts': timezone.now().isoformat(), 'rd': False, 'priority': priority, 'category': category}
             Note.objects.create(nid=nid, to=to, data=json.dumps(clean))
-            mail_async(sub, sub + '\n\nOpen the permit system to review it.', to)
+            permit_email(sub, to, pid, base(request).rstrip('/'))
     return JsonResponse({'ok': True})
 
 def verify(request, t):

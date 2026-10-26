@@ -262,7 +262,7 @@ const eff=()=>document.documentElement.dataset.theme||(window.matchMedia&&matchM
 const lbl=()=>{const b=$('#tb');if(b)b.textContent=eff()=='dark'?'Light mode':'Dark mode'};
 function tgl(){const t=eff()=='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('ptw_theme',t)}catch(e){}lbl()}
 try{const t=localStorage.getItem('ptw_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}lbl();
-const BUILD='2026-10-25 digital-signoff-handover v29 - email errors are reported';
+const BUILD='2026-10-26 digital-signoff-handover v30 - detailed permit emails';
 let ACT=[],DP=[];
 let knownNoteIds=null;
 let users=[],db=[],notes=[],me=null,enabledTypes=['GW','EX','HW','WH','HO','WO','CS'],noteFilter='all',noteQuery='',view='list',nk='GW',cur=null,cb=null,drawn=false,last='',snap={},tab='pending',msg='',pend={},PUB=false,BASE=location.origin+'/';
