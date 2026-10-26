@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
 import random
 import secrets
@@ -13,14 +14,14 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import connections, transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-10-25 digital-signoff-handover v28 - online deployment package'   # keep in sync with BUILD in index.html
+BUILD = '2026-10-25 digital-signoff-handover v29 - email errors are reported'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -239,6 +240,31 @@ _last_alert = [0.0]
 def pts(s):
     return datetime.fromisoformat(str(s).replace('Z', '+00:00'))
 
+log = logging.getLogger('permits')
+
+def deliver(sub, body, to):
+    """Send one email. Returns '' on success or the reason it failed (also logged and kept for the administrator)."""
+    try:
+        send_mail(sub, body, None, [to], fail_silently=False)
+        return ''
+    except Exception as ex:
+        msg = (type(ex).__name__ + ': ' + str(ex))[:500]
+        log.warning('Email to %s failed: %s', to, msg)
+        try:
+            Setting.objects.update_or_create(key='last_mail_error', defaults={'value': msg})
+        except Exception:
+            pass
+        return msg
+
+def mail_async(sub, body, to):
+    """Notification emails are sent in the background so a slow mail service never delays a permit action."""
+    def run():
+        try:
+            deliver(sub, body, to)
+        finally:
+            connections.close_all()
+    threading.Thread(target=run, daemon=True).start()
+
 def mk_note(to, sub, pid):
     nid = time.time() * 1000 + random.random()
     low = sub.lower()
@@ -246,7 +272,7 @@ def mk_note(to, sub, pid):
     category = 'lifecycle' if any(k in low for k in ('suspend', 'resum', 'complete', 'closure', 'closed')) else 'approval' if any(k in low for k in ('confirm', 'approve', 'correction', 'clarification')) else 'expiry' if any(k in low for k in ('expire', 'valid window', 'not returned', 'overdue')) else 'general'
     n = {'id': nid, 'to': to, 'sub': sub, 'pid': pid, 'ts': timezone.now().isoformat(), 'rd': False, 'priority': priority, 'category': category}
     Note.objects.create(nid=str(nid), to=to, data=json.dumps(n))
-    send_mail(sub, sub + '\n\nOpen the permit system to review it.', None, [to], fail_silently=True)
+    mail_async(sub, sub + '\n\nOpen the permit system to review it.', to)
 
 def alert_once(key, people, sub, pid):
     if Alert.objects.filter(key=key).exists():
@@ -404,7 +430,7 @@ def forgot(request):
             code = f'{secrets.randbelow(10 ** 6):06d}'
             with WRITE_LOCK:
                 ResetCode.objects.update_or_create(email=e, defaults={'code': code_hash(e, code), 'expires': now + timedelta(minutes=15), 'sent': now, 'tries': 0})
-            send_mail('Your permit system sign-in code', f'Your code is {code}\n\nIt works for 15 minutes. Enter it on the sign-in page to choose a new PIN. If you did not ask for it, ignore this email.', None, [e], fail_silently=True)
+            deliver('Your permit system sign-in code', f'Your code is {code}\n\nIt works for 15 minutes. Enter it on the sign-in page to choose a new PIN. If you did not ask for it, ignore this email.', e)
     return JsonResponse({'ok': True, 'mode': email_mode()})
 
 @csrf_exempt
@@ -662,7 +688,7 @@ def notes(request):
             category = 'lifecycle' if any(k in sub_low for k in ('suspend', 'resum', 'complete', 'closure', 'closed')) else 'approval' if any(k in sub_low for k in ('confirm', 'approve', 'correction', 'clarification')) else 'expiry' if any(k in sub_low for k in ('expire', 'valid window', 'not returned', 'overdue')) else 'general'
             clean = {'id': n['id'], 'to': to, 'sub': sub, 'pid': pid, 'ts': timezone.now().isoformat(), 'rd': False, 'priority': priority, 'category': category}
             Note.objects.create(nid=nid, to=to, data=json.dumps(clean))
-            send_mail(sub, sub + '\n\nOpen the permit system to review it.', None, [to], fail_silently=True)
+            mail_async(sub, sub + '\n\nOpen the permit system to review it.', to)
     return JsonResponse({'ok': True})
 
 def verify(request, t):
@@ -924,5 +950,5 @@ def admin_testmail(request):
     a = admin_only(request)
     if not a:
         return err('Administrator only.', 403)
-    send_mail('Test email from the permit system', 'If you can read this, the permit system can send email.', None, [a.email], fail_silently=True)
-    return JsonResponse({'ok': True, 'mode': email_mode(), 'to': a.email})
+    failure = deliver('Test email from the permit system', 'If you can read this, the permit system can send email.', a.email)
+    return JsonResponse({'ok': True, 'mode': email_mode(), 'to': a.email, 'error': failure})

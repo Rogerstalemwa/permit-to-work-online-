@@ -1,6 +1,7 @@
 """Sends email through Brevo's web API (HTTPS), for hosts that block SMTP ports.
 Set BREVO_API_KEY and EMAIL_FROM (an address verified as a sender in Brevo)."""
 import json
+import urllib.error
 import urllib.request
 from email.utils import parseaddr
 from django.conf import settings
@@ -21,6 +22,10 @@ class BrevoEmailBackend(BaseEmailBackend):
             try:
                 urllib.request.urlopen(req, timeout=10).read()
                 sent += 1
+            except urllib.error.HTTPError as ex:
+                if not self.fail_silently:
+                    detail = ex.read().decode('utf-8', 'replace')[:300]
+                    raise RuntimeError('Brevo refused the email (HTTP %s): %s' % (ex.code, detail))
             except Exception:
                 if not self.fail_silently:
                     raise
