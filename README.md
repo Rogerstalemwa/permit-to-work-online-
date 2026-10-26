@@ -114,3 +114,14 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 - Production mode (`DJANGO_ENV=production`): secret key from environment, allowed hosts, secure cookies, HTTPS-aware links, static files served by WhiteNoise. PostgreSQL when `DATABASE_URL` is set. Local `run.bat` use is unchanged.
 - `DEMO_MODE=1` shows a yellow "DEMO SYSTEM" bar; the footer "Reset demo data" link was removed.
 - Tested with gunicorn and PostgreSQL 16: sign-up, sign-in, permit rules, parallel serial numbers, static files, secure cookie flags and the browser screens.
+
+
+## Version 29 — Email errors are reported
+
+- The Settings test-email button now shows the real reason when sending fails (for example an invalid Brevo key or unverified sender) instead of reporting success.
+- Notification emails are sent in the background so a slow mail service cannot delay permit actions; failures are written to the server log.
+
+
+## Version 30 — Detailed permit emails
+
+- Notification emails now name the recipient and include the permit number, type, department/area, requester, date and time, a short work description and a link to sign in, with the subject starting "[Permit to Work]".
