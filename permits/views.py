@@ -21,7 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-10-26 digital-signoff-handover v30 - detailed permit emails'   # keep in sync with BUILD in index.html
+BUILD = '2026-10-26 digital-signoff-handover v32 - general sign-in QR code'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 

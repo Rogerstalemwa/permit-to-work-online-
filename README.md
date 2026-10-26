@@ -125,3 +125,8 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 ## Version 30 — Detailed permit emails
 
 - Notification emails now name the recipient and include the permit number, type, department/area, requester, date and time, a short work description and a link to sign in, with the subject starting "[Permit to Work]".
+
+
+## Version 31/32 — Sign-in QR code
+
+- Administrator > Settings > **Sign-in QR code**: one general QR code that opens the sign-in page. Print it as an A4 poster or a sheet of six stickers, or download it as a PNG image. It holds only the web address.
