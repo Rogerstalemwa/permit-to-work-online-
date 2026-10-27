@@ -39,13 +39,6 @@ class Permit(models.Model):
     data = models.TextField()
     updated = models.DateTimeField(auto_now=True)
 
-class PermitDraft(models.Model):
-    owner = models.CharField(max_length=120, db_index=True)
-    kind = models.CharField(max_length=10, default="HW")
-    title = models.CharField(max_length=180, blank=True, default="")
-    data = models.TextField(default="{}")
-    updated = models.DateTimeField(auto_now=True)
-
 class Note(models.Model):
     nid = models.CharField(max_length=40, unique=True)
     to = models.CharField(max_length=120)
@@ -85,3 +78,14 @@ def _sqlite_tuning(sender, connection, **kwargs):
         cur.execute('PRAGMA busy_timeout=30000;')
 
 connection_created.connect(_sqlite_tuning)
+
+
+class Draft(models.Model):
+    """A receiver's unfinished permit form, saved automatically so it can be continued on another device."""
+    email = models.CharField(max_length=120, db_index=True)
+    kind = models.CharField(max_length=8)
+    data = models.TextField(default='{}')
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (('email', 'kind'),)
