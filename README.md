@@ -130,3 +130,9 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 ## Version 31/32 — Sign-in QR code
 
 - Administrator > Settings > **Sign-in QR code**: one general QR code that opens the sign-in page. Print it as an A4 poster or a sheet of six stickers, or download it as a PNG image. It holds only the web address.
+
+
+## Version 33 — Disabled buttons and eye icon
+
+- New-permit buttons are now **disabled** (greyed out) for a receiver who already has an open permit of that kind, and all of them are disabled while the receiver has an overdue permit. A note under the buttons names the permit and has an Open button to go and return it.
+- Every PIN/password field now has an **eye icon** (show/hide) instead of the word "Show".
