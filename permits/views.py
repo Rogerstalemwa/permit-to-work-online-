@@ -19,9 +19,9 @@ from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
+from .models import Alert, Area, AuditLog, Counter, Dept, Note, Permit, PermitDraft, Person, ResetCode, Setting, Site
 
-BUILD = '2026-10-26 digital-signoff-handover v33 - disabled permit buttons and eye icon'   # keep in sync with BUILD in index.html
+BUILD = '2026-10-27 permit drafts v34'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -522,6 +522,39 @@ def serial(request):
         c.n += 1
         c.save()
     return JsonResponse({'no': f'{site}-{kind}-{c.n:04d}'})
+
+@csrf_exempt
+def drafts(request):
+    """Private cross-device drafts for the signed-in account; drafts are never permits or approvals."""
+    p = me(request)
+    if not p:
+        return err('auth', 401)
+    if request.method == 'GET':
+        rows = PermitDraft.objects.filter(owner=p.email).order_by('-updated')
+        return JsonResponse({'drafts': [{'id': x.id, 'kind': x.kind, 'title': x.title,
+            'updated': x.updated.isoformat(), 'data': json.loads(x.data)} for x in rows]})
+    d = body(request)
+    if not isinstance(d, dict):
+        return err('Invalid draft.')
+    if d.get('delete'):
+        PermitDraft.objects.filter(id=d.get('id'), owner=p.email).delete()
+        return JsonResponse({'ok': True})
+    raw = d.get('data')
+    if not isinstance(raw, dict):
+        return err('Draft data is required.')
+    # Guard payload size and ensure the draft belongs to the currently signed-in user.
+    if len(json.dumps(raw, ensure_ascii=False)) > 1_500_000:
+        return err('This draft is too large to save. Remove large attachments and try again.')
+    did = d.get('id')
+    row = PermitDraft.objects.filter(id=did, owner=p.email).first() if did else None
+    kind = str(d.get('kind') or raw.get('kind') or 'HW')[:10]
+    title = str(d.get('title') or raw.get('desc') or raw.get('name') or 'Untitled permit draft')[:180]
+    if row:
+        row.kind, row.title, row.data = kind, title, json.dumps(raw, ensure_ascii=False)
+        row.save()
+    else:
+        row = PermitDraft.objects.create(owner=p.email, kind=kind, title=title, data=json.dumps(raw, ensure_ascii=False))
+    return JsonResponse({'ok': True, 'id': row.id, 'updated': row.updated.isoformat()})
 
 @csrf_exempt
 def permit(request):
