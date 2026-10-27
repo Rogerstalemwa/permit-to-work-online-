@@ -138,10 +138,6 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 - Every PIN/password field now has an **eye icon** (show/hide) instead of the word "Show".
 
 
-## Version 34 — Cross-device permit drafts
+## Version 34 — Permit drafts
 
-- New permit forms automatically save draft progress to the server while the user is signed in and online, with a periodic sync and a manual **Save now** option.
-- **My drafts** lists saved drafts with a last-saved timestamp. The user can continue a draft after signing into the same account on another device, or delete it.
-- Drafts are private to the account that created them. They are not submitted permits, do not receive approvals, and do not authorize work. A draft is removed when it is successfully submitted as a permit.
-- A new database migration (`0003_permitdraft`) creates the draft store. The normal startup flow should apply migrations; if running Django commands manually, run `python manage.py migrate`.
-- Draft syncing requires a working network connection. If power or connectivity fails before the latest edits reach the server, the most recent unsynced changes may not be recoverable. This is a demo implementation and should be tested with each permit type and RAMS fields before operational use.
+- While a receiver fills in any permit form, it is saved automatically (a second after the last change, and when the page is hidden or closed) to the server and to the browser. After a browser crash, power cut or switching device, opening the same permit type restores the form, including site, department, area, ticks, team members and the RAMS section. A green bar shows when it was saved and offers "Discard draft". Saved drafts also appear under New permit with Continue and Delete. A draft is removed when the permit is sent. Attached files are not part of a draft. New database table: run migrations (Render does this on deploy).
