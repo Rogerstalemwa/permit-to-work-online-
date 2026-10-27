@@ -136,3 +136,12 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 
 - New-permit buttons are now **disabled** (greyed out) for a receiver who already has an open permit of that kind, and all of them are disabled while the receiver has an overdue permit. A note under the buttons names the permit and has an Open button to go and return it.
 - Every PIN/password field now has an **eye icon** (show/hide) instead of the word "Show".
+
+
+## Version 34 — Cross-device permit drafts
+
+- New permit forms automatically save draft progress to the server while the user is signed in and online, with a periodic sync and a manual **Save now** option.
+- **My drafts** lists saved drafts with a last-saved timestamp. The user can continue a draft after signing into the same account on another device, or delete it.
+- Drafts are private to the account that created them. They are not submitted permits, do not receive approvals, and do not authorize work. A draft is removed when it is successfully submitted as a permit.
+- A new database migration (`0003_permitdraft`) creates the draft store. The normal startup flow should apply migrations; if running Django commands manually, run `python manage.py migrate`.
+- Draft syncing requires a working network connection. If power or connectivity fails before the latest edits reach the server, the most recent unsynced changes may not be recoverable. This is a demo implementation and should be tested with each permit type and RAMS fields before operational use.
