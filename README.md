@@ -141,3 +141,9 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 ## Version 34 — Permit drafts
 
 - While a receiver fills in any permit form, it is saved automatically (a second after the last change, and when the page is hidden or closed) to the server and to the browser. After a browser crash, power cut or switching device, opening the same permit type restores the form, including site, department, area, ticks, team members and the RAMS section. A green bar shows when it was saved and offers "Discard draft". Saved drafts also appear under New permit with Continue and Delete. A draft is removed when the permit is sent. Attached files are not part of a draft. New database table: run migrations (Render does this on deploy).
+
+## Version 35 — New look
+
+- **Desktop shell:** dark-green sidebar with icons, the user area and Sign out at the bottom, and a clean content area. Phones keep the compact top layout.
+- **Dashboard (administrator Overview, issuer and owner Dashboard):** stat cards with trend chips and a mini chart, a 14-day "Permits raised" bar chart, a status donut, permit types with share bars, and departments with share bars. All figures come from the real permit data.
+- **Styling:** pill buttons, larger rounded cards, softer shadows, light and dark themes.
