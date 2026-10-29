@@ -144,6 +144,12 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 
 ## Version 35 — New look
 
-- **Desktop shell:** dark-green sidebar with icons, the user area and Sign out at the bottom, and a clean content area. Phones keep the compact top layout.
+- The menu stays on top, as before (a sidebar version was tried and reverted in version 36).
 - **Dashboard (administrator Overview, issuer and owner Dashboard):** stat cards with trend chips and a mini chart, a 14-day "Permits raised" bar chart, a status donut, permit types with share bars, and departments with share bars. All figures come from the real permit data.
 - **Styling:** pill buttons, larger rounded cards, softer shadows, light and dark themes.
+
+## Version 37 — Floating top panel and open-permit layout
+
+- **Top panel for every account** (administrator, receiver, issuer, area owner): a floating rounded bar with the logo, pill-shaped tabs in the centre, a notification bell with a count, an avatar chip with the person's name and role, Sign out, and a light/dark switch. Below it a "Welcome back" greeting with the date. On phones the bar wraps and the tabs scroll.
+- **Open permit page:** on desktop the permit is split into a main column and a sticky side panel holding the status, QR code, sign-off progress (receiver, issuer, area owner) and all action buttons, so the buttons are always in view. On phones the panel comes first. Printing is unchanged.
+- The administrator tab "Sites and departments" is now "Sites" so all seven tabs fit.
