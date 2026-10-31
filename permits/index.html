@@ -291,6 +291,18 @@ h2{letter-spacing:-.02em}
 .deskbar{display:flex;align-items:center;gap:14px;justify-content:space-between;background:#e8590c;color:#fff;padding:14px 18px;font-size:clamp(15px,2.8vw,34px);line-height:1.35;position:sticky;top:0;z-index:60}
 .deskbar[hidden]{display:none}.deskbar button{flex:none;background:#fff;color:#a63d00;border:0;border-radius:999px;font-weight:800;font-size:inherit;padding:8px 22px;cursor:pointer}
 @media(max-width:520px){.kg{gap:10px}.kc{padding:12px 12px 10px;border-radius:18px}.kc.hero{grid-column:1/-1}.kic{width:32px;height:32px;border-radius:11px}.kic svg{width:17px;height:17px}.kl{margin-top:8px;min-height:0;font-size:12.5px}.kn{font-size:28px}.cd{font-size:10.5px;padding:3px 8px}.spk{height:30px;margin-top:8px}.hello{margin:4px 4px 12px}.hi{font-size:26px}.datechip{font-size:12.5px;padding:8px 12px}.g2{gap:12px}.c{padding:14px!important}}
+/* v40: phone top panel, round equal buttons, no empty strip */
+#nav:empty{display:none!important}
+.ib,.av,.avc{flex:none!important}
+.ib{min-width:40px;min-height:40px}
+.top .lg img{object-fit:contain;width:auto}
+@media(max-width:760px){
+.top{padding:9px 12px!important;row-gap:8px!important;column-gap:8px!important}
+.top .lg{padding:2px 6px!important;border-radius:12px!important}.top .lg img{height:28px!important}
+.tright,#who{gap:8px!important}
+.ib{width:40px!important;height:40px!important}
+.av{padding:2px!important;width:40px;height:40px;justify-content:center;box-sizing:border-box}.avc{width:34px!important;height:34px!important;font-size:13px}
+}
 .print-only{display:none}
 @media print{
 @page{size:A4;margin:12mm}
@@ -355,7 +367,7 @@ const eff=()=>document.documentElement.dataset.theme||(window.matchMedia&&matchM
 const lbl=()=>{const b=$('#tb');if(!b)return;const d=eff()=='dark',S=p=>`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${p}"/></svg>`;b.innerHTML=d?S('M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4'):S('M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z');b.title=b.ariaLabel=d?'Switch to light mode':'Switch to dark mode'};
 function tgl(){const t=eff()=='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('ptw_theme',t)}catch(e){}lbl()}
 try{const t=localStorage.getItem('ptw_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}lbl();
-const BUILD='2026-10-29 digital-signoff-handover v39 - phone layout';
+const BUILD='2026-10-31 digital-signoff-handover v40 - phone panel';
 let ACT=[],DP=[];
 let knownNoteIds=null;
 let users=[],db=[],notes=[],me=null,enabledTypes=['GW','EX','HW','WH','HO','WO','CS'],noteFilter='all',noteQuery='',view='list',nk='GW',cur=null,cb=null,drawn=false,last='',snap={},tab='pending',msg='',pend={},PUB=false,BASE=location.origin+'/';
