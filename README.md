@@ -153,3 +153,22 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 - **Top panel for every account** (administrator, receiver, issuer, area owner): a floating rounded bar with the logo, pill-shaped tabs in the centre, a notification bell with a count, an avatar chip with the person's name and role, Sign out, and a light/dark switch. Below it a "Welcome back" greeting with the date. On phones the bar wraps and the tabs scroll.
 - **Open permit page:** on desktop the permit is split into a main column and a sticky side panel holding the status, QR code, sign-off progress (receiver, issuer, area owner) and all action buttons, so the buttons are always in view. On phones the panel comes first. Printing is unchanged.
 - The administrator tab "Sites and departments" is now "Sites" so all seven tabs fit.
+
+## Version 38 — Tabs never clipped
+
+- No tab is ever cut off. If the tabs do not fit beside the logo and buttons, they move to their own centred row inside the top panel while the buttons stay top-right. On phones the tabs wrap onto several lines. The administrator's avatar shows initials only, to leave room for seven tabs.
+
+## Version 39 — Phone layout
+
+- Phone dashboards are more compact (smaller cards, the first card spans the full width).
+- If a phone shows the desktop version (Chrome's "Desktop site" option), an orange bar explains how to switch it off.
+
+## Version 40 — Phone panel
+
+- Top panel buttons on phones are equal round buttons (the theme button no longer squashes into an oval), the avatar matches them, the logo is smaller, and the empty strip under the bar in forms is gone.
+
+## Version 41 — Any number of permits, audit export and bulk print
+
+- **No same-kind limit:** a receiver can have as many open permits of any kind as needed. Only overdue (not returned) permits still stop a receiver from starting a new one.
+- **Administrator > Permits (register):** filters for search, company, site, department, type, status and date range; tick boxes to select permits; **Download Excel** (selected, or all shown) and **Print permits** (selected, or all shown). The Excel workbook has three sheets: Summary (filters, counts), Permits (full details, sign-off times) and Sign-offs (one row per confirmation and return). Printing makes one document with a cover list and each permit on its own pages; use Save as PDF in the print window for a file.
+- The new Excel export uses `openpyxl` (added to requirements).

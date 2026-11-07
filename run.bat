@@ -9,7 +9,7 @@ where %PYCMD% >nul 2>nul || (
 )
 if not exist .venv\Scripts\activate.bat %PYCMD% -m venv .venv
 call .venv\Scripts\activate.bat
-python -c "import django, whitenoise" >nul 2>nul || pip install -q -r requirements.txt
+python -c "import django, whitenoise, openpyxl" >nul 2>nul || pip install -q -r requirements.txt
 python manage.py makemigrations permits
 python manage.py migrate
 echo.
