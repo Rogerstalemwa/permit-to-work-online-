@@ -1,8 +1,10 @@
 import hashlib
 import hmac
 import json
+import io
 import logging
 import os
+from zoneinfo import ZoneInfo
 import random
 import secrets
 import socket
@@ -21,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Draft, Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-10-31 digital-signoff-handover v40 - phone panel'   # keep in sync with BUILD in index.html
+BUILD = '2026-11-01 digital-signoff-handover v41 - any number of permits, audit export'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -71,8 +73,9 @@ KIND_NAMES = {'GW': 'General Work', 'EX': 'Excavation', 'HW': 'Hot Works', 'WH':
               'HO': 'Hot Work (Operations)', 'WO': 'Work at Height (Operations)', 'CS': 'Confined Space Entry'}
 
 def receiver_block(email, kind):
-    """Message explaining why this receiver may not start another permit, or '' when allowed."""
-    overdue, same = [], []
+    """Message explaining why this receiver may not start a new permit, or '' when allowed.
+    Only overdue (not returned) permits block; a receiver may have any number of open permits of the same kind."""
+    overdue = []
     for row in Permit.objects.filter(by=email):
         try:
             dd = json.loads(row.data)
@@ -80,12 +83,8 @@ def receiver_block(email, kind):
             continue
         if _permit_overdue(dd):
             overdue.append(dd.get('no') or str(row.id))
-        elif dd.get('kind') == kind and _permit_open(dd):
-            same.append(dd.get('no') or str(row.id))
     if overdue:
         return 'You have overdue permits that were not returned (' + ', '.join(overdue) + '). Return them before you start or sign a new permit.'
-    if same:
-        return 'You already have an open ' + KIND_NAMES.get(kind, 'permit of this kind') + ' permit (' + ', '.join(same) + '). Return and close it, or cancel it, before starting another of the same kind.'
     return ''
 
 def enabled_permit_types():
@@ -950,6 +949,88 @@ def admin_rams(request):
     Setting.objects.update_or_create(key='rams_enabled', defaults={'value': 'true' if enabled else 'false'})
     audit(me(request), 'RAMS module setting changed', 'enabled' if enabled else 'disabled')
     return JsonResponse({'ok': True, 'enabled': enabled})
+
+def _local(ts):
+    try:
+        return datetime.fromisoformat(str(ts).replace('Z', '+00:00')).astimezone(ZoneInfo('Africa/Kampala')).replace(tzinfo=None)
+    except Exception:
+        return None
+
+@csrf_exempt
+def admin_export(request):
+    """Administrator: build an Excel workbook (summary, permits, sign-offs) for the permits the page sends."""
+    if not admin_only(request):
+        return err('Administrator only.', 403)
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    d = body(request)
+    status = {}
+    for x in (d.get('items') or [])[:5000]:
+        try:
+            status[int(float(x['id']))] = str(x.get('status', ''))
+        except (KeyError, TypeError, ValueError):
+            pass
+    rows = {r.id: json.loads(r.data) for r in Permit.objects.filter(id__in=list(status))}
+    ids = [i for i in status if i in rows]
+    sites = {s.code: s.name for s in Site.objects.all()}
+    head = PatternFill('solid', fgColor='0B6247')
+    def sheet(ws, headers, data, widths):
+        ws.append(headers)
+        for c in ws[1]:
+            c.font = Font(bold=True, color='FFFFFF'); c.fill = head; c.alignment = Alignment(vertical='center', wrap_text=True)
+        for r in data:
+            ws.append(r)
+        for n, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(n)].width = w
+        for row in ws.iter_rows(min_row=2):
+            for c in row:
+                c.alignment = Alignment(vertical='top', wrap_text=True)
+                if hasattr(c.value, 'year'):
+                    c.number_format = 'dd mmm yyyy hh:mm'
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = ws.dimensions
+    wb = Workbook(); ws = wb.active; ws.title = 'Summary'
+    me_p = me(request)
+    ws.append(['Permit to Work: audit extract']); ws['A1'].font = Font(bold=True, size=16, color='0B6247')
+    ws.append(['Generated', timezone.localtime().replace(tzinfo=None).strftime('%d %b %Y %H:%M'), 'by', me_p.name if me_p else ''])
+    ws.append(['Permits in this file', len(ids)]); ws.append([])
+    ws.append(['Filters applied']); ws.cell(ws.max_row, 1).font = Font(bold=True)
+    for f in (d.get('filters') or ['None (all permits)'])[:20]:
+        ws.append([str(f)])
+    ws.append([]); ws.append(['By status']); ws.cell(ws.max_row, 1).font = Font(bold=True)
+    for k in sorted({status[i] for i in ids}):
+        ws.append([k, sum(1 for i in ids if status[i] == k)])
+    ws.append([]); ws.append(['By type']); ws.cell(ws.max_row, 1).font = Font(bold=True)
+    for k in sorted({KIND_NAMES.get(rows[i].get('kind'), rows[i].get('kind', '')) for i in ids}):
+        ws.append([k, sum(1 for i in ids if KIND_NAMES.get(rows[i].get('kind'), rows[i].get('kind', '')) == k)])
+    ws.column_dimensions['A'].width = 34; ws.column_dimensions['B'].width = 26
+    pw = wb.create_sheet('Permits'); sg = wb.create_sheet('Sign-offs')
+    prow, srow = [], []
+    roles = ['Receiver', 'Issuer', 'Area owner']
+    for i in ids:
+        p = rows[i]; sig = p.get('sig') or []; ret = p.get('ret') or []
+        g = lambda k, n: _local(sig[k].get('ts')) if len(sig) > k else None
+        prow.append([p.get('no'), KIND_NAMES.get(p.get('kind'), p.get('kind')), sites.get(p.get('site'), p.get('site')), p.get('dept'), p.get('loc'), p.get('company'), p.get('name'),
+                     p.get('date'), p.get('end') or p.get('date'), p.get('start'), p.get('finish'), status[i],
+                     _local(sig[0].get('ts')) if len(sig) > 0 else None,
+                     sig[1].get('name') if len(sig) > 1 else '', _local(sig[1].get('ts')) if len(sig) > 1 else None,
+                     sig[2].get('name') if len(sig) > 2 else '', _local(sig[2].get('ts')) if len(sig) > 2 else None,
+                     _local(ret[2].get('ts')) if len(ret) > 2 else None,
+                     (p.get('cx') or {}).get('name', ''), (p.get('cx') or {}).get('reason', ''),
+                     p.get('eq', ''), p.get('it', ''), p.get('desc', ''), ', '.join(str(t) for t in (p.get('team') or [])), p.get('em', '')])
+        for k, x in enumerate(sig[:3]):
+            srow.append([p.get('no'), 'Permit issue', roles[k], x.get('name'), x.get('e') or x.get('by'), _local(x.get('ts'))])
+        for k, x in enumerate(ret[:3]):
+            srow.append([p.get('no'), 'Permit return', roles[k], x.get('name'), x.get('e') or x.get('by'), _local(x.get('ts'))])
+    sheet(pw, ['Permit', 'Type', 'Site', 'Department', 'Area', 'Company', 'Receiver', 'Start date', 'End date', 'From', 'To', 'Status', 'Receiver confirmed', 'Issuer', 'Issuer confirmed', 'Area owner', 'Area owner confirmed', 'Return completed', 'Cancelled by', 'Cancel reason', 'Equipment', 'Item no.', 'Work description', 'Team members', 'Emergency notes'], prow,
+          [14, 30, 22, 16, 22, 24, 20, 12, 12, 8, 8, 18, 20, 18, 20, 18, 20, 20, 16, 24, 18, 10, 48, 30, 36])
+    sheet(sg, ['Permit', 'Step', 'Role', 'Name', 'Email', 'Date and time'], srow, [14, 16, 14, 24, 30, 22])
+    audit(me_p, 'Permits exported to Excel', str(len(ids)) + ' permits')
+    buf = io.BytesIO(); wb.save(buf)
+    resp = HttpResponse(buf.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = 'attachment; filename="permits.xlsx"'
+    return resp
 
 @csrf_exempt
 def admin_toolbox(request):
