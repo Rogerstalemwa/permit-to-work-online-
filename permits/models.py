@@ -89,3 +89,12 @@ class Draft(models.Model):
 
     class Meta:
         unique_together = (('email', 'kind'),)
+
+
+class Photo(models.Model):
+    """A site photo attached to a permit (stored as a compressed JPEG data URL)."""
+    pid = models.BigIntegerField(db_index=True)
+    stage = models.CharField(max_length=10, default='other')
+    by = models.CharField(max_length=120)
+    data = models.TextField()
+    created = models.DateTimeField(auto_now_add=True)

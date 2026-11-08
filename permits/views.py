@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -21,9 +22,9 @@ from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Draft, Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
+from .models import Photo, Draft, Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-11-07 digital-signoff-handover v42 - live board, analytics, tidy filters'   # keep in sync with BUILD in index.html
+BUILD = '2026-11-08 digital-signoff-handover v43 - photos, lock-out/tag-out, motion'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -190,10 +191,19 @@ def tok(pid):
     # unguessable code for each permit, used in the QR link
     return hmac.new(settings.SECRET_KEY.encode(), str(pid).encode(), hashlib.sha256).hexdigest()[:16]
 
-def with_tok(x):
+def with_tok(x, photos=None):
     d = json.loads(x.data)
     d['tok'] = tok(x.id)
+    d.pop('photos', None)
+    if photos is not None:
+        d['photos'] = photos.get(x.id, [])
     return d
+
+def photo_meta(ids):
+    out = {}
+    for r in Photo.objects.filter(pid__in=list(ids)).values('id', 'pid', 'stage', 'by', 'created').order_by('id'):
+        out.setdefault(r['pid'], []).append({'id': r['id'], 'stage': r['stage'], 'e': r['by'], 'ts': r['created'].isoformat()})
+    return out
 
 def lan_ip():
     try:
@@ -392,7 +402,7 @@ def state(request):
     return JsonResponse({
         'build': BUILD, 'me': pub(p), 'users': [pub(x) for x in Person.objects.filter(active=True).order_by('id')], 'drafts': drafts_of(p),
         'activity': activity(), 'sites': structure(), 'notice': notice(), 'permit_types': enabled_permit_types(), 'rams_enabled': rams_enabled(), 'toolbox_enabled': toolbox_enabled(), 'demo': os.environ.get('DEMO_MODE') == '1',
-        'permits': [with_tok(x) for x in qs.order_by('id')],
+        'permits': (lambda rows: [with_tok(x, photo_meta([r.id for r in rows])) for x in rows])(list(qs.order_by('id'))),
         'notes': [json.loads(n.data) for n in Note.objects.filter(to=p.email).order_by('id')], 'base': base(request),
     })
 
@@ -556,6 +566,88 @@ def draft(request):
         row, _ = Draft.objects.update_or_create(email=p.email, kind=kind, defaults={'data': raw})
     return JsonResponse({'ok': True, 'updated': row.updated.isoformat()})
 
+def loto_error(old_rows, new_rows, p):
+    """Validate lock-out/tag-out lines: steps are append-only and must be recorded by the signed-in user in the right role."""
+    new_rows = new_rows if isinstance(new_rows, list) else []
+    if len(new_rows) > 30:
+        return 'Too many isolation lines.'
+    old_by = {x.get('id'): x for x in (old_rows or []) if isinstance(x, dict)}
+    roles = {'applied': ('Receiver', 'Administrator'), 'verified': ('Issuer', 'Area Owner', 'Administrator'), 'removed': ('Receiver', 'Administrator')}
+    for x in new_rows:
+        if not isinstance(x, dict) or not x.get('id'):
+            return 'Invalid isolation line.'
+        o = old_by.get(x['id'], {})
+        for step, ok_roles in roles.items():
+            if x.get(step) != o.get(step):
+                if o.get(step):
+                    return 'An isolation step cannot be changed once it is recorded.'
+                s = x.get(step) or {}
+                if str(s.get('e', '')).lower() != p.email.lower():
+                    return 'Each isolation step must be recorded by the signed-in user.'
+                if p.role not in ok_roles:
+                    return 'Your role cannot record this isolation step.'
+                if step == 'removed' and not (x.get('applied') or {}):
+                    return 'Remove a lock only after it was applied.'
+    kept = {x.get('id') for x in new_rows if isinstance(x, dict)}
+    for oid, o in old_by.items():
+        if oid not in kept and (o.get('applied') or o.get('verified') or o.get('removed')):
+            return 'An isolation line that was applied cannot be deleted.'
+    return ''
+
+def _can_touch(p, row):
+    return p.role == 'Administrator' or row.by == p.email or (p.role in ('Issuer', 'Area Owner') and row.site == p.site and row.dept in depts_of(p))
+
+@csrf_exempt
+def photo(request):
+    """GET ?id= returns the image; POST {pid, stage, data} adds one; POST {id, delete: true} removes one."""
+    p = me(request)
+    if not p:
+        return err('auth', 401)
+    if request.method == 'GET':
+        try:
+            ph = Photo.objects.filter(id=int(request.GET.get('id', '0'))).first()
+        except ValueError:
+            ph = None
+        row = Permit.objects.filter(id=ph.pid).first() if ph else None
+        if not ph or not row or not _can_touch(p, row):
+            return HttpResponse(status=404)
+        resp = HttpResponse(base64.b64decode(ph.data.split(',', 1)[1]), content_type='image/jpeg')
+        resp['Cache-Control'] = 'private, max-age=3600'
+        return resp
+    d = body(request)
+    if d.get('delete'):
+        ph = Photo.objects.filter(id=d.get('id') or 0).first()
+        row = Permit.objects.filter(id=ph.pid).first() if ph else None
+        if not ph or not row or not (p.role == 'Administrator' or ph.by == p.email):
+            return err('Not allowed to remove this photo.', 403)
+        dd = json.loads(row.data)
+        if dd.get('cx') or len(dd.get('ret') or []) >= 3:
+            return err('This permit is closed, so its photos are locked.', 409)
+        ph.delete()
+        audit(p, 'Photo removed', dd.get('no', ''))
+        return JsonResponse({'ok': True})
+    row = Permit.objects.filter(id=d.get('pid') or 0).first()
+    if not row or not _can_touch(p, row):
+        return err('Not allowed to add photos to this permit.', 403)
+    dd = json.loads(row.data)
+    if dd.get('cx') or len(dd.get('ret') or []) >= 3:
+        return err('This permit is closed, so photos can no longer be added.', 409)
+    stage = d.get('stage') if d.get('stage') in ('before', 'after', 'other') else 'other'
+    data = str(d.get('data', ''))
+    if not data.startswith('data:image/jpeg;base64,') or len(data) > 1800000:
+        return err('Send a JPEG photo under 1.3 MB.')
+    try:
+        raw = base64.b64decode(data.split(',', 1)[1], validate=True)
+    except Exception:
+        return err('The photo could not be read.')
+    if raw[:3] != b'\xff\xd8\xff':
+        return err('The photo must be a JPEG image.')
+    if Photo.objects.filter(pid=row.id).count() >= 24:
+        return err('A permit can hold at most 24 photos.', 409)
+    ph = Photo.objects.create(pid=row.id, stage=stage, by=p.email, data=data)
+    audit(p, 'Photo added (' + stage + ')', dd.get('no', ''))
+    return JsonResponse({'ok': True, 'id': ph.id})
+
 @csrf_exempt
 def permit(request):
     p = me(request)
@@ -564,6 +656,7 @@ def permit(request):
     d = body(request)
     if not isinstance(d, dict) or 'id' not in d:
         return err('A valid permit ID is required.')
+    d.pop('photos', None)
     with WRITE_LOCK:
         old = Permit.objects.filter(id=d['id']).first()
         old_data = json.loads(old.data) if old else {}
@@ -607,6 +700,9 @@ def permit(request):
                     return err('Only an assigned reviewer can approve this permit.', 403)
                 if field == 'ret' and p.role == 'Receiver' and old.by != p.email:
                     return err('Only the original Receiver can update this return history.', 403)
+        bad = loto_error(old_data.get('loto'), d.get('loto'), p)
+        if bad:
+            return err(bad, 403)
         if d.get('cx') and not old_data.get('cx') and not is_authority:
             return err('Only an assigned Issuer, Area Owner or Administrator can cancel this permit.', 403)
         if old_data.get('cx') and d.get('cx') != old_data.get('cx'):
@@ -1007,6 +1103,8 @@ def admin_export(request):
     ws.column_dimensions['A'].width = 34; ws.column_dimensions['B'].width = 26
     pw = wb.create_sheet('Permits'); sg = wb.create_sheet('Sign-offs')
     prow, srow = [], []
+    from django.db.models import Count
+    photo_n = {r['pid']: r['n'] for r in Photo.objects.filter(pid__in=ids).values('pid').annotate(n=Count('id'))}
     roles = ['Receiver', 'Issuer', 'Area owner']
     for i in ids:
         p = rows[i]; sig = p.get('sig') or []; ret = p.get('ret') or []
@@ -1018,13 +1116,18 @@ def admin_export(request):
                      sig[2].get('name') if len(sig) > 2 else '', _local(sig[2].get('ts')) if len(sig) > 2 else None,
                      _local(ret[2].get('ts')) if len(ret) > 2 else None,
                      (p.get('cx') or {}).get('name', ''), (p.get('cx') or {}).get('reason', ''),
-                     p.get('eq', ''), p.get('it', ''), p.get('desc', ''), ', '.join(str(t) for t in (p.get('team') or [])), p.get('em', '')])
+                     p.get('eq', ''), p.get('it', ''), p.get('desc', ''), ', '.join(str(t) for t in (p.get('team') or [])), p.get('em', ''),
+                     (lambda L: '%d / %d / %d of %d' % (sum(1 for l in L if l.get('applied')), sum(1 for l in L if l.get('verified')), sum(1 for l in L if l.get('removed')), len(L)) if L else '')(p.get('loto') or []), photo_n.get(i, 0)])
+        for l in (p.get('loto') or []):
+            for stp, lab in (('applied', 'Lock applied'), ('verified', 'Isolation verified'), ('removed', 'Lock removed')):
+                if l.get(stp):
+                    srow.append([p.get('no'), lab + ': ' + str(l.get('src', '')) + ' (' + str(l.get('tag', '')) + ')', {'applied': 'Receiver', 'verified': 'Issuer / area owner', 'removed': 'Receiver'}[stp], l[stp].get('name'), l[stp].get('e'), _local(l[stp].get('ts'))])
         for k, x in enumerate(sig[:3]):
             srow.append([p.get('no'), 'Permit issue', roles[k], x.get('name'), x.get('e') or x.get('by'), _local(x.get('ts'))])
         for k, x in enumerate(ret[:3]):
             srow.append([p.get('no'), 'Permit return', roles[k], x.get('name'), x.get('e') or x.get('by'), _local(x.get('ts'))])
-    sheet(pw, ['Permit', 'Type', 'Site', 'Department', 'Area', 'Company', 'Receiver', 'Start date', 'End date', 'From', 'To', 'Status', 'Receiver confirmed', 'Issuer', 'Issuer confirmed', 'Area owner', 'Area owner confirmed', 'Return completed', 'Cancelled by', 'Cancel reason', 'Equipment', 'Item no.', 'Work description', 'Team members', 'Emergency notes'], prow,
-          [14, 30, 22, 16, 22, 24, 20, 12, 12, 8, 8, 18, 20, 18, 20, 18, 20, 20, 16, 24, 18, 10, 48, 30, 36])
+    sheet(pw, ['Permit', 'Type', 'Site', 'Department', 'Area', 'Company', 'Receiver', 'Start date', 'End date', 'From', 'To', 'Status', 'Receiver confirmed', 'Issuer', 'Issuer confirmed', 'Area owner', 'Area owner confirmed', 'Return completed', 'Cancelled by', 'Cancel reason', 'Equipment', 'Item no.', 'Work description', 'Team members', 'Emergency notes', 'Isolations (applied / verified / removed of total)', 'Photos'], prow,
+          [14, 30, 22, 16, 22, 24, 20, 12, 12, 8, 8, 18, 20, 18, 20, 18, 20, 20, 16, 24, 18, 10, 48, 30, 36, 26, 8])
     sheet(sg, ['Permit', 'Step', 'Role', 'Name', 'Email', 'Date and time'], srow, [14, 16, 14, 24, 30, 22])
     audit(me_p, 'Permits exported to Excel', str(len(ids)) + ' permits')
     buf = io.BytesIO(); wb.save(buf)
