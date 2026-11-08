@@ -172,3 +172,15 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 - **No same-kind limit:** a receiver can have as many open permits of any kind as needed. Only overdue (not returned) permits still stop a receiver from starting a new one.
 - **Administrator > Permits (register):** filters for search, company, site, department, type, status and date range; tick boxes to select permits; **Download Excel** (selected, or all shown) and **Print permits** (selected, or all shown). The Excel workbook has three sheets: Summary (filters, counts), Permits (full details, sign-off times) and Sign-offs (one row per confirmation and return). Printing makes one document with a cover list and each permit on its own pages; use Save as PDF in the print window for a file.
 - The new Excel export uses `openpyxl` (added to requirements).
+
+## Version 42 — Live board and analytics
+
+- **Live board** (administrator, issuers and area owners): everything being worked on right now, grouped by site, department and area, with counters for hot work, work at height, confined space, excavation and overdue; areas with more than one permit are flagged as possible clashes; each permit shows the receiver's phone and the time left.
+- Dashboard: new **Top companies** and **Busiest areas** rankings.
+- The administrator permit-register filter row is now aligned.
+
+## Version 43 — Photos, lock-out/tag-out and motion
+
+- **Site photos** on every permit: before work, after work and other. Taken or chosen on the phone, shrunk to about 1280 pixels, stored on the server (new Photo table, run migrations), shown as thumbnails with a full-size viewer. Locked when the permit is closed. Included when printing and counted in the Excel export.
+- **Isolation and lock-out / tag-out** on every permit: lines for each energy source with the isolation point and lock/tag number. Three recorded steps: applied (receiver), verified (issuer or area owner), removed (receiver). The issuer cannot approve until every line is applied and verified, and the receiver cannot return the permit until every lock is removed. Steps are checked on the server and are append-only. Shown in the printout and in the Excel Permits and Sign-offs sheets.
+- **Motion:** a splash with a circular reveal once per session, cards that rise in one after another, numbers that count up, bars and charts that grow, a soft blur-fade between pages and a popping active tab. Switched off automatically for people who prefer reduced motion.
