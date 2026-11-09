@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Photo, Draft, Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-11-08 digital-signoff-handover v44 - motion removed'   # keep in sync with BUILD in index.html
+BUILD = '2026-11-09 digital-signoff-handover v46 - sign-in page, receiver-only photos, easy way back'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -431,6 +431,7 @@ def login(request):
         return JsonResponse({'ok': False, 'deactivated': True, 'contacts': admins}, status=403)
     if p and p.login and p.active and check_password(d.get('p', ''), p.pin):
         request.session['e'] = p.email
+        request.session.set_expiry(30 * 24 * 3600 if d.get('remember') else 0)   # remembered: 30 days; otherwise until the browser is closed
         with WRITE_LOCK:
             p.last_login = timezone.now()
             p.save(update_fields=['last_login'])
@@ -599,7 +600,7 @@ def _can_touch(p, row):
 
 @csrf_exempt
 def photo(request):
-    """GET ?id= returns the image; POST {pid, stage, data} adds one; POST {id, delete: true} removes one."""
+    """GET ?id= returns the image to anyone who can see the permit; POST {pid, stage, data} adds one (the permit's receiver only); POST {id, delete: true} removes one (the uploader or the administrator)."""
     p = me(request)
     if not p:
         return err('auth', 401)
@@ -627,8 +628,8 @@ def photo(request):
         audit(p, 'Photo removed', dd.get('no', ''))
         return JsonResponse({'ok': True})
     row = Permit.objects.filter(id=d.get('pid') or 0).first()
-    if not row or not _can_touch(p, row):
-        return err('Not allowed to add photos to this permit.', 403)
+    if not row or p.role != 'Receiver' or row.by != p.email:
+        return err('Only the receiver of this permit can add photos. Issuers and area owners view them to verify.', 403)
     dd = json.loads(row.data)
     if dd.get('cx') or len(dd.get('ret') or []) >= 3:
         return err('This permit is closed, so photos can no longer be added.', 409)
