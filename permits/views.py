@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Photo, Draft, Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-11-09 digital-signoff-handover v46 - sign-in page, receiver-only photos, easy way back'   # keep in sync with BUILD in index.html
+BUILD = '2026-11-10 digital-signoff-handover v47 - drafts need 60% complete'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -536,7 +536,14 @@ def serial(request):
 def drafts_of(p):
     if p.role != 'Receiver':
         return []
-    return [{'kind': d.kind, 'updated': d.updated.isoformat()} for d in Draft.objects.filter(email=p.email).order_by('-updated')]
+    out = []
+    for d in Draft.objects.filter(email=p.email).order_by('-updated'):
+        try:
+            pct = json.loads(d.data).get('pct')
+        except ValueError:
+            pct = None
+        out.append({'kind': d.kind, 'updated': d.updated.isoformat(), 'pct': pct})
+    return out
 
 @csrf_exempt
 def draft(request):
@@ -560,6 +567,9 @@ def draft(request):
     if d.get('delete'):
         Draft.objects.filter(email=p.email, kind=kind).delete()
         return JsonResponse({'ok': True})
+    pct = (d.get('data') or {}).get('pct')
+    if isinstance(pct, (int, float)) and pct < 60:
+        return err('A draft is kept once the permit is at least 60% filled in.')
     raw = json.dumps(d.get('data') or {})
     if len(raw) > 400000:
         return err('This draft is too large to save.')

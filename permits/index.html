@@ -326,6 +326,7 @@ h2{letter-spacing:-.02em}
 #hello.fb{position:sticky;top:86px;z-index:15}
 @media(max-width:760px){#hello.fb{top:8px}.fbm{display:none}}
 .rmrow{display:flex;align-items:center;gap:10px;margin:14px 0 2px;font-size:14px;font-weight:500;color:var(--tx);cursor:pointer}.rmrow input{width:18px;height:18px;margin:0;flex:none}
+.fbt{flex:1 1 100%;height:5px;border-radius:99px;background:var(--ln);overflow:hidden;margin-top:2px}.fbt i{display:block;height:100%;width:0;border-radius:99px;background:#d98a00}.fbt i.ok{background:var(--ok)}
 .print-only{display:none}
 @media print{
 @page{size:A4;margin:12mm}
@@ -392,7 +393,7 @@ const eff=()=>document.documentElement.dataset.theme||(window.matchMedia&&matchM
 const lbl=()=>{const b=$('#tb');if(!b)return;const d=eff()=='dark',S=p=>`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${p}"/></svg>`;b.innerHTML=d?S('M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4'):S('M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z');b.title=b.ariaLabel=d?'Switch to light mode':'Switch to dark mode'};
 function tgl(){const t=eff()=='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('ptw_theme',t)}catch(e){}lbl()}
 try{const t=localStorage.getItem('ptw_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}lbl();
-const BUILD='2026-11-09 digital-signoff-handover v46 - sign-in page, receiver-only photos, easy way back';
+const BUILD='2026-11-10 digital-signoff-handover v47 - drafts need 60% complete';
 let ACT=[],DP=[];
 let knownNoteIds=null;
 let users=[],db=[],notes=[],me=null,enabledTypes=['GW','EX','HW','WH','HO','WO','CS'],noteFilter='all',noteQuery='',view='list',nk='GW',cur=null,cb=null,drawn=false,last='',snap={},tab='pending',msg='',pend={},PUB=false,BASE=location.origin+'/';
@@ -423,7 +424,7 @@ if(r)tos(p,r).forEach(e=>nt(e,`${p.no} ${w} ${k==3?(ph=='a'?'approved. Work may 
 function deskWarn(){try{if(sessionStorage.getItem('ptwdesk'))return;const small=Math.min(screen.width,screen.height)<=600;if(matchMedia('(pointer:coarse)').matches&&small&&innerWidth>700){const d=document.getElementById('deskBar');if(d)d.hidden=false}}catch(e){}}
 function deskClose(){try{sessionStorage.setItem('ptwdesk','1')}catch(e){}const d=document.getElementById('deskBar');if(d)d.hidden=true}
 window.addEventListener('load',deskWarn);
-const formBarH=()=>`<div class="formbar"><button type="button" class="b s" onclick="leaveForm()">← ${view=='new'?'Back to permits':'Back to the permit'}</button><span class="mu fbm">${view=='new'?'Your draft saves automatically, so you can come back to it.':'Nothing is sent until you confirm.'}</span><button type="button" class="b s" style="color:var(--wr)" onclick="leaveForm(true)">${view=='new'?'Discard and leave':'Cancel changes'}</button></div>`;
+const formBarH=()=>`<div class="formbar"><button type="button" class="b s" onclick="leaveForm()">← ${view=='new'?'Back to permits':'Back to the permit'}</button><span class="mu fbm" id="fbm">${view=='new'?'':'Nothing is sent until you confirm.'}</span><button type="button" class="b s" style="color:var(--wr)" onclick="leaveForm(true)">${view=='new'?'Discard and leave':'Cancel changes'}</button>${view=='new'?'<div class="fbt"><i id="fbp"></i></div>':''}</div>`;
 function leaveForm(discard){if(view=='new'){if(discard){if(!confirm('Discard this draft and leave the form?'))return;draftDrop(nk)}else{try{clearTimeout(_dt);draftSave(false)}catch(e){}}view='list'}else{view='card'}draw();window.scrollTo(0,0)}
 function goHome(){if(!me||PUB)return;if(view=='new'||view=='edit')return leaveForm();view=me.r=='Administrator'?'a_over':'list';draw();window.scrollTo(0,0)}
 function fitTop(){const t=document.querySelector('.top');if(!t)return;t.classList.remove('wrap');const b=t.querySelector('.brand'),r=t.querySelector('.tright');if(b&&r&&r.offsetTop>b.offsetTop+20)t.classList.add('wrap')}
@@ -767,7 +768,18 @@ w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Permit
 const DKEY=k=>'ptwdraft:'+((me&&me.e)||'')+':'+k;
 const dTime=t=>new Date(t).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 function draftCapture(){const b=document.getElementById('app'),v={},n={};b.querySelectorAll('input,textarea,select').forEach(el=>{if(el.type=='file'||el.type=='password'||el.closest('#ramsBlock')||el.classList.contains('tmn'))return;if(el.type=='checkbox'||el.type=='radio'){if(el.name){n[el.name]=n[el.name]||[];if(el.checked)n[el.name].push(el.value)}else if(el.id)v[el.id]=el.checked}else if(el.id)v[el.id]=el.value});return{kind:nk,v,n,team:[...b.querySelectorAll('.tmn')].map(x=>x.value),rams:(RAMS_ENABLED&&document.getElementById('ramsBlock'))?readRams():null}}
-function draftMeaningful(d){return !!(d.v.dp||d.team.some(Boolean)||Object.keys(d.v).some(k=>{const el=document.getElementById(k);return el&&(el.tagName=='TEXTAREA'||el.type=='text')&&d.v[k]}))}
+let _dbase={};
+const DMIN=60,dSkip=['isu','own'];
+function draftBase(){_dbase={};document.querySelectorAll('#app input,#app textarea,#app select').forEach(e=>{if(e.id&&e.value)_dbase[e.id]=e.value})}
+function draftProgress(){const a=document.getElementById('app');if(!a)return{pct:0,filled:0,total:0};let tr=0,fr=0,ta=0,fa=0;const seen={};
+ ['st','dp','loc'].forEach(id=>{const e=document.getElementById(id);if(e){tr++;ta++;if(e.value){fr++;fa++}}});
+ a.querySelectorAll('input,textarea,select').forEach(e=>{if(!e.offsetParent||e.closest('#ramsBlock,#draftbar,#formbar,.formbar')||e.classList.contains('tmn')||['file','password','hidden','date','time','submit','button'].includes(e.type)||['st','dp','loc'].includes(e.id))return;
+  const w=e.closest('label')||e.parentElement,rq=!!(w&&w.querySelector('.wr'));
+  if(e.type=='checkbox'||e.type=='radio'){if(e.name&&dSkip.includes(e.name))return;if(e.name){if(!seen[e.name]){seen[e.name]=1;ta++;if([...a.querySelectorAll('input[name="'+e.name+'"]')].some(x=>x.checked))fa++}}else if(e.id){ta++;if(e.checked)fa++}if(rq){tr++;if(e.checked)fr++}return}
+  ta++;const ok=!!e.value.trim()&&e.value!==_dbase[e.id];if(ok)fa++;if(rq){tr++;if(ok)fr++}});
+ const tm=a.querySelectorAll('.tmn');if(tm.length){const ok=[...tm].some(x=>x.value.trim());tr++;ta++;if(ok){fr++;fa++}}
+ const useReq=tr>=5,t=useReq?tr:ta,f=useReq?fr:fa;return{pct:t?Math.round(f/t*100):0,filled:f,total:t}}
+function fbProgress(){if(view!='new')return;const r=draftProgress(),m=document.getElementById('fbm'),b=document.getElementById('fbp');if(m)m.textContent=r.pct>=DMIN?'Draft saved automatically · '+r.pct+'% complete':r.pct+'% complete · a draft is kept once you reach '+DMIN+'%';if(b){b.style.width=Math.min(100,r.pct)+'%';b.className=r.pct>=DMIN?'ok':''}}
 function draftApply(d){if(!d||d.kind!=nk)return;const v=d.v||{},n=d.n||{},chip=(sel,key,val)=>[...document.querySelectorAll(sel)].find(x=>x.dataset[key]==val);
  if(v.st){const b=chip('#stb .chip','s',v.st);if(b)pickS(b)}if(v.dp){const b=chip('#dpb .chip','d',v.dp);if(b)pickD(b)}if(v.loc){const b=chip('#locb .chip','a',v.loc);if(b)pickL(b)}
  Object.keys(v).forEach(id=>{if(id=='st'||id=='dp'||id=='loc')return;const el=document.getElementById(id);if(!el)return;if(id=='dt'&&v[id]<today())return;if(el.type=='checkbox'||el.type=='radio')el.checked=!!v[id];else el.value=v[id]});
@@ -776,8 +788,8 @@ function draftApply(d){if(!d||d.kind!=nk)return;const v=d.v||{},n=d.n||{},chip=(
  const rb=document.getElementById('ramsBlock');if(rb&&d.rams&&d.rams.v)rb.outerHTML=ramsInputs('',d.rams);
  try{tg()}catch(e){}try{clx()}catch(e){}}
 function draftNote(t,keep){const a=document.getElementById('app');if(!a||view!='new')return;let b=document.getElementById('draftbar');if(!b){b=document.createElement('div');b.id='draftbar';b.className='draftbar noprint';b.innerHTML='<span></span><button type="button" class="b s" onclick="draftDiscard()">Discard draft</button>';a.insertBefore(b,a.firstChild)}b.firstElementChild.textContent=t}
-function draftMark(k,ts){DRAFTS=DRAFTS.filter(x=>x.kind!=k);if(ts)DRAFTS.unshift({kind:k,updated:new Date(ts).toISOString()})}
-function draftSave(now){if(view!='new'||!me||me.r!='Receiver'||!nk||!draftReady)return;const d=draftCapture();if(!draftMeaningful(d))return;const ts=Date.now();try{localStorage.setItem(DKEY(nk),JSON.stringify({ts,data:d}))}catch(e){}
+function draftMark(k,ts){DRAFTS=DRAFTS.filter(x=>x.kind!=k);if(ts)DRAFTS.unshift({kind:k,updated:new Date(ts).toISOString(),pct:(typeof ts=='number'&&nk==k&&view=='new')?draftProgress().pct:null})}
+function draftSave(now){if(view!='new'||!me||me.r!='Receiver'||!nk||!draftReady)return;const d=draftCapture(),pr=draftProgress();d.pct=pr.pct;fbProgress();if(pr.pct<DMIN){if(DRAFTS.some(x=>x.kind==nk)||rmGet(DKEY(nk)))draftDrop(nk);return}const ts=Date.now();try{localStorage.setItem(DKEY(nk),JSON.stringify({ts,data:d}))}catch(e){}
  const body=JSON.stringify({kind:nk,data:d}),k=nk;
  if(now&&navigator.sendBeacon){navigator.sendBeacon('/api/draft',new Blob([body],{type:'application/json'}));return}
  fetch('/api/draft',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).then(r=>r.json()).then(j=>{if(j&&j.ok){draftMark(k,ts);draftNote('Draft saved '+dTime(ts)+'. You can continue it on any device.')}else draftNote('Saved on this device only.')}).catch(()=>draftNote('Offline. Saved on this device only; it will sync when you edit again.'))}
@@ -787,14 +799,14 @@ async function draftOpen(){draftReady=false;if(!me||me.r!='Receiver')return;cons
  try{loc=JSON.parse(localStorage.getItem(DKEY(k))||'null')}catch(e){}
  if(loc&&loc.data&&(!rec||loc.ts>rec.ts+2000))rec=loc;
  if(view!='new'||nk!=k)return;
- if(rec&&rec.data){draftApply(rec.data);draftNote('Draft restored from '+dTime(rec.ts)+'. Your changes keep saving automatically.')}
+ if(rec&&rec.data&&!(typeof rec.data.pct=='number'&&rec.data.pct<DMIN)){draftApply(rec.data);draftNote('Draft restored from '+dTime(rec.ts)+'. Your changes keep saving automatically.')}
  setTimeout(()=>{if(view=='new'&&nk==k)draftReady=true},700)}
 function draftDrop(k){if(!k)return;try{localStorage.removeItem(DKEY(k))}catch(e){}draftMark(k,0);if(me&&me.r=='Receiver')fetch('/api/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:k,delete:true}),keepalive:true}).catch(()=>{})}
 function draftDiscard(){if(!confirm('Discard this draft and start the form again?'))return;const k=nk;draftDrop(k);draftReady=false;view='new';draw();setTimeout(()=>{draftReady=true},700)}
 function draftDel(k){if(!confirm('Delete this saved draft?'))return;draftDrop(k);draw()}
-function draftsH(){if(!me||me.r!='Receiver'||!DRAFTS.length)return'';return DRAFTS.filter(x=>KN[x.kind]).map(x=>`<div class="blknote draftrow"><span><b>${esc(KN[x.kind])}</b> draft, saved ${esc(dTime(x.updated))}</span><span><button class="b" onclick="startNew('${x.kind}')">Continue</button> <button class="b s" onclick="draftDel('${x.kind}')">Delete</button></span></div>`).join('')}
-document.addEventListener('input',e=>{if(view=='new'&&e.target.closest&&e.target.closest('#app'))draftSched()});
-document.addEventListener('change',e=>{if(view=='new'&&e.target.closest&&e.target.closest('#app'))draftSched()});
+function draftsH(){if(!me||me.r!='Receiver'||!DRAFTS.length)return'';return DRAFTS.filter(x=>KN[x.kind]&&!(typeof x.pct=='number'&&x.pct<DMIN)).map(x=>`<div class="blknote draftrow"><span><b>${esc(KN[x.kind])}</b> draft${typeof x.pct=='number'?' ('+x.pct+'% complete)':''}, saved ${esc(dTime(x.updated))}</span><span><button class="b" onclick="startNew('${x.kind}')">Continue</button> <button class="b s" onclick="draftDel('${x.kind}')">Delete</button></span></div>`).join('')}
+document.addEventListener('input',e=>{if(view=='new'&&e.target.closest&&e.target.closest('#app')){draftSched();fbProgress()}});
+document.addEventListener('change',e=>{if(view=='new'&&e.target.closest&&e.target.closest('#app')){draftSched();fbProgress()}});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='hidden'&&view=='new'){clearTimeout(_dt);draftSave(true)}});
 window.addEventListener('pagehide',()=>{if(view=='new')draftSave(true)});
 {const app=document.getElementById('app');if(app)new MutationObserver(()=>{if(view=='new'&&draftReady)draftSched()}).observe(app,{childList:true,subtree:true,attributes:true,attributeFilter:['class']})}
@@ -824,7 +836,7 @@ function blockUI(t,m,list){const old=document.getElementById('blk');if(old)old.r
 function blockedFor(kind){if(!me||me.r!='Receiver')return null;const od=db.filter(p=>p.by==me.e&&isOverdueP(p));if(od.length)return{t:'Return your overdue permits first',m:'These permits were not returned on time. Return them before you start or sign a new permit.',l:od};return null}
 function guardNew(kind){const b=blockedFor(kind);if(b){blockUI(b.t,b.m,b.l);return false}return true}
 function blockNote(){if(!me||me.r!='Receiver')return'';const od=db.filter(p=>p.by==me.e&&isOverdueP(p));if(!od.length)return'';return`<div class="blknote"><span><b>New permits are disabled.</b> These permits are overdue. Return them first.</span><span>${od.map(p=>`<button class="b s" onclick="cur=${p.id};view='card';draw()">Open ${esc(p.no||'permit')}</button>`).join(' ')}</span></div>`}
-function startNew(k){if(!guardNew(k))return;nk=k;view='new';draw();draftOpen()}
+function startNew(k){if(!guardNew(k))return;nk=k;view='new';draw();draftBase();fbProgress();draftOpen()}
 async function saveRamsSetting(enabled){const r=await apiR('/api/admin/rams',{enabled});const m=$('#ramsmsg');if(!r.ok){if(m)m.textContent=r.d.error||'Could not save the setting.';$('#ramsEnabled').checked=RAMS_ENABLED;return}RAMS_ENABLED=!!r.d.enabled;if(m)m.textContent=RAMS_ENABLED?'RAMS section enabled.':'RAMS section hidden. Existing records are preserved.'}
 async function clearAll(){if(prompt('This deletes every permit. Type DELETE to confirm.')!='DELETE')return;const r=await apiR('/api/admin/reset',{});if(r.ok){db=[];notes=[];last='';await pull(true);view='a_over';draw()}}
 let ct='Issuer',cd='',cst='';
