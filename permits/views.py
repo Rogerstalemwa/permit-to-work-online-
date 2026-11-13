@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Photo, Draft, Alert, Area, AuditLog, Counter, Dept, Note, Permit, Person, ResetCode, Setting, Site
 
-BUILD = '2026-11-10 digital-signoff-handover v47 - drafts need 60% complete'   # keep in sync with BUILD in index.html
+BUILD = '2026-11-11 digital-signoff-handover v48 - batch approval queue'   # keep in sync with BUILD in index.html
 ROLES = ['Receiver', 'Issuer', 'Area Owner']   # roles that can be created; the Administrator is created at first start
 PERMIT_TYPES = {'GW': 'General work', 'EX': 'Excavation', 'HW': 'Hot works', 'WH': 'Work at height', 'HO': 'Hot work', 'WO': 'Work at height', 'CS': 'Confined space entry'}
 
@@ -46,6 +46,15 @@ def escalation_settings():
 def rams_enabled():
     row = Setting.objects.filter(key='rams_enabled').first()
     return row.value.lower() in ('1', 'true', 'on', 'yes') if row else False
+
+def batch_kinds():
+    """Permit kinds the issuer / area owner may approve together in one batch (default: General Work only)."""
+    row = Setting.objects.filter(key='batch_kinds').first()
+    try:
+        ks = json.loads(row.value) if row else ['GW']
+    except ValueError:
+        ks = ['GW']
+    return [k for k in ks if k in KIND_NAMES]
 
 def toolbox_enabled():
     row = Setting.objects.filter(key='toolbox_enabled').first()
@@ -390,7 +399,7 @@ def state(request):
     seed_structure()
     p = me(request)
     if not p:
-        return JsonResponse({'build': BUILD, 'me': None, 'setup': not Person.objects.filter(role='Administrator').exists(), 'notice': notice(), 'email_mode': email_mode(), 'permit_types': enabled_permit_types(), 'rams_enabled': rams_enabled(), 'toolbox_enabled': toolbox_enabled(), 'demo': os.environ.get('DEMO_MODE') == '1'})
+        return JsonResponse({'build': BUILD, 'me': None, 'setup': not Person.objects.filter(role='Administrator').exists(), 'notice': notice(), 'email_mode': email_mode(), 'permit_types': enabled_permit_types(), 'rams_enabled': rams_enabled(), 'toolbox_enabled': toolbox_enabled(), 'batch_kinds': batch_kinds(), 'demo': os.environ.get('DEMO_MODE') == '1'})
     touch(p)
     maybe_alerts()
     if p.role == 'Administrator':
@@ -401,7 +410,7 @@ def state(request):
         qs = Permit.objects.filter(site=p.site, dept__in=depts_of(p))
     return JsonResponse({
         'build': BUILD, 'me': pub(p), 'users': [pub(x) for x in Person.objects.filter(active=True).order_by('id')], 'drafts': drafts_of(p),
-        'activity': activity(), 'sites': structure(), 'notice': notice(), 'permit_types': enabled_permit_types(), 'rams_enabled': rams_enabled(), 'toolbox_enabled': toolbox_enabled(), 'demo': os.environ.get('DEMO_MODE') == '1',
+        'activity': activity(), 'sites': structure(), 'notice': notice(), 'permit_types': enabled_permit_types(), 'rams_enabled': rams_enabled(), 'toolbox_enabled': toolbox_enabled(), 'batch_kinds': batch_kinds(), 'demo': os.environ.get('DEMO_MODE') == '1',
         'permits': (lambda rows: [with_tok(x, photo_meta([r.id for r in rows])) for x in rows])(list(qs.order_by('id'))),
         'notes': [json.loads(n.data) for n in Note.objects.filter(to=p.email).order_by('id')], 'base': base(request),
     })
@@ -1145,6 +1154,15 @@ def admin_export(request):
     resp = HttpResponse(buf.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     resp['Content-Disposition'] = 'attachment; filename="permits.xlsx"'
     return resp
+
+@csrf_exempt
+def admin_batch(request):
+    if not admin_only(request):
+        return err('Administrator only.', 403)
+    ks = [k for k in (body(request).get('kinds') or []) if k in KIND_NAMES]
+    Setting.objects.update_or_create(key='batch_kinds', defaults={'value': json.dumps(ks)})
+    audit(me(request), 'Batch approval types changed', ', '.join(KIND_NAMES[k] for k in ks) or 'none')
+    return JsonResponse({'ok': True, 'kinds': ks})
 
 @csrf_exempt
 def admin_toolbox(request):
