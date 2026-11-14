@@ -181,6 +181,34 @@ Testing: rendered a sample hot works permit in headless Chromium and printed it 
 
 ## Version 43 — Photos, lock-out/tag-out and motion
 
-- **Site photos** on every permit: before work, after work and other. Taken or chosen on the phone, shrunk to about 1280 pixels, stored on the server (new Photo table, run migrations), shown as thumbnails with a full-size viewer. Locked when the permit is closed. Included when printing and counted in the Excel export.
+- **Site photos** on every permit: before work, after work and other. Added by the receiver only (issuers, area owners and the administrator view them to verify; the administrator can remove a photo). Taken or chosen on the phone, shrunk to about 1280 pixels, stored on the server (new Photo table, run migrations), shown as thumbnails with a full-size viewer. Locked when the permit is closed. Included when printing and counted in the Excel export.
 - **Isolation and lock-out / tag-out** on every permit: lines for each energy source with the isolation point and lock/tag number. Three recorded steps: applied (receiver), verified (issuer or area owner), removed (receiver). The issuer cannot approve until every line is applied and verified, and the receiver cannot return the permit until every lock is removed. Steps are checked on the server and are append-only. Shown in the printout and in the Excel Permits and Sign-offs sheets.
-- **Motion:** a splash with a circular reveal once per session, cards that rise in one after another, numbers that count up, bars and charts that grow, a soft blur-fade between pages and a popping active tab. Switched off automatically for people who prefer reduced motion.
+
+## Version 44 — Motion removed
+
+- All animations, transitions and blur effects were removed because they made the app lag on some devices (splash, card entrance, count-up, growing bars, page fade, hover lifts, blurred top bar). Photos and lock-out/tag-out from version 43 are unchanged.
+
+## Version 45 — Photos are added by the receiver only
+
+- Only the permit's own receiver can add photos; the server refuses everyone else. Issuers and area owners see the photos to verify them, and the section appears for them only when photos exist.
+- **Easy way out of a form:** a bar stays at the top of the new-permit and correction forms with "Back to permits" (the draft is kept) and "Discard and leave" (or "Cancel changes" when correcting a permit), so nobody has to scroll to the bottom. The logo in the top panel is now a Home button.
+
+## Version 46 — Sign-in page
+
+- The sign-in page now says "Welcome back" with the message "Enter your credentials to access your account." and has a **Remember me on this device** tick. Ticked: the person stays signed in for 30 days and the email is filled in next time (the PIN is never stored). Not ticked: they are signed out when the browser is closed, and the email is not kept.
+
+## Version 47 — Drafts need 60%
+
+- A draft is only kept (and only listed under New permit) once the permit form is at least 60% filled in. Only visible fields marked required (plus site, department and area, and the team list) are counted, so optional fields and hidden fields do not inflate or lower the percentage; defaults such as dates, times and the pre-filled receiver name do not count. The bar at the top of the form shows the live percentage; if the form falls below 60% again the draft is removed. Drafts show their percentage in the list. The server also refuses drafts below 60%.
+
+## Version 48 — Batch approval queue
+
+- **To approve** (issuers and area owners): every permit waiting for the signed-in person, grouped by site, department, area and permit type, with a company and type filter. Tick the permits you have checked (or Select this group / Select all ready) and press **Approve selected**; a summary lists them, the approver confirms they reviewed them, and each permit receives its own time-stamped confirmation noted "Approved in a batch of N".
+- Permits that cannot be batch-approved are shown with the reason and a checkbox that is disabled: types the administrator has not allowed (**Administrator > Settings > Batch approval**, General Work only by default), lock-out lines not yet applied and verified, expired permits, and permits with an open correction or clarification request.
+- The greeting shows how many permits are waiting and links to the queue.
+
+## Version 49 — Isolation on demand, quieter screens
+
+- The **Isolation and lock-out / tag-out** section now appears on a permit only when isolation is declared on it: the "Isolations / LOTO required" tick on the hot work forms, or hazardous energy selected on the other forms. Permits that already hold isolation lines keep showing it.
+- The draft completeness percentage and progress bar are no longer shown (the 60% rule still decides when a draft is kept). Drafts are listed without a percentage.
+- The yellow "DEMO SYSTEM" bar and the orange "desktop version" bar are removed.

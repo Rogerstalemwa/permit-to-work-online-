@@ -18,7 +18,6 @@ You need: a GitHub account (free) and a Render account (free; sign in with GitHu
 1. The first screen asks you to create the administrator. **Save the recovery key it shows you**, because it is the way back in if you forget the PIN.
 2. In the Administrator pages create the sites and departments (UBL, IDU) and a few demo accounts (receiver, issuer, area owner).
 3. In **Settings** switch the RAMS module and Toolbox Talk capture on if you want to show them (both start off).
-4. A yellow "DEMO SYSTEM" bar shows at the top of every page.
 
 ## 4. Email notifications (optional)
 Free Render services cannot send normal email (SMTP ports are blocked), so this package sends through Brevo's web API instead.
